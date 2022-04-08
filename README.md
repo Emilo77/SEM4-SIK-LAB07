@@ -30,103 +30,115 @@ struct pollfd {
 
 W polu events można ustawić następujące flagi:
 
-    POLLIN – obserwowanie nadejścia danych do odczytu
-    POLLOUT – obserwowanie możliwości zapisania danych
-    POLLPRI – obserwowanie nadejścia danych wyjątkowych (out-of-band)
+- `POLLIN` – obserwowanie nadejścia danych do odczytu
+- `POLLOUT` – obserwowanie możliwości zapisania danych
+- `POLLPRI` – obserwowanie nadejścia danych wyjątkowych (out-of-band)
 
-Po wywołaniu funkcji poll() w polu revents ustawione są flagi oznaczające zdarzenia, które zaszły. Mogą to być flagi POLLIN, POLLOUT i POLLPRI - oznaczają wtedy zajście odpowiadającego im zdarzenia. Oprócz tego mogą zostać ustawione również inne flagi:
+Po wywołaniu funkcji `poll()` w polu revents ustawione są flagi oznaczające zdarzenia, które zaszły. Mogą to być flagi `POLLIN`, `POLLOUT` i `POLLPRI` - oznaczają wtedy zajście odpowiadającego im zdarzenia. Oprócz tego mogą zostać ustawione również inne flagi:
 
-    POLLERR – wystąpił błąd
-    POLLHUP – rozłączenie
-    POLLNVAL – niewłaściwy deskryptor
+- `POLLERR` – wystąpił błąd
+- `POLLHUP` – rozłączenie
+- `POLLNVAL` – niewłaściwy deskryptor
 
-Funkcja poll() przekazuje w wyniku liczbę deskryptorów, dla których zaszło jakieś zdarzenie (>0), 0 jeśli minął czas oczekiwania, a -1 w przypadku błędu.
+Funkcja `poll()` przekazuje w wyniku liczbę deskryptorów, dla których zaszło jakieś zdarzenie (>0), 0 jeśli minął czas oczekiwania, a -1 w przypadku błędu.
 
 Schemat działania serwera jest następujący:
 
-    struct pollfd fds[N];
+```c
+struct pollfd fds[N];
 
-    for (i = 0; i < N; ++i) {
-       fds[i].fd = -1;
-       fds[i].events = POLLIN;
-       fds[i].revents = 0;
-    }
-    
-    fds[0].fd = socket();    
-    bind();
-    listen();
-    
-    do {
-    
-      poll(fds, N, -1);
-    
-      if (fds[0].revents & POLLIN) {
-        fds[0].revents = 0;
-        s = accept(fds[0].fd, ...)
-        // umieść deskryptor s w tablicy fds 
-      }
-      
-      for (k = 1; k < N; ++k)
-         if (fds[k].revents & POLLIN | POLLERR ) {        
-             fds[k].revents = 0;     
-             // obsłuż klienta na gnieździe fds[k].fd 
-             // jeżeli read przekaże wartość <=0, usuń pozycję k z fds       
-    }
+for (i = 0; i < N; ++i) {
+   fds[i].fd = -1;
+   fds[i].events = POLLIN;
+   fds[i].revents = 0;
+}
 
-Jeżeli zdarzenie zaszło na deskryptorze głównym fds[0].fd, to znaczy, że nowy klient chce się połączyć. W takim przypadku serwer musi zaakceptować nowe połączenie za pomocą funkcji accept, a deskryptor nowego gniazda należy dodać do zbioru obserwowanych deskryptorów, czyli umieścić w tablicy deskryptorów fds.
+fds[0].fd = socket();    
+bind();
+listen();
 
-Jeżeli zdarzenie zaszło na którymś z pozostałych deskryptorów, to należy odczytać dane, które zostały przesłane przez któregoś z wcześniej połączonych klientów. Należy rozpatrzyć różne przypadki. Jeśli read dla danego deskryptora przekaże w wyniku wartość ujemną (błąd) lub 0 (rozłączenie klienta), to deskryptor należy usunąć z tablicy fds.
-Ćwiczenia
+do {
 
-    Przeanalizuj kod przykładowego serwera z pliku poll_server.c.
+  poll(fds, N, -1);
 
-    Uruchom serwer i co najmniej dwóch klientów.
+  if (fds[0].revents & POLLIN) {
+    fds[0].revents = 0;
+    s = accept(fds[0].fd, ...)
+    // umieść deskryptor s w tablicy fds 
+  }
 
-    Serwer co 5 sekund wypisuje komunikat "Do something else". Zmień argumenty funkcji poll() tak, aby oczekiwał na połączenia aż do skutku.
+  for (k = 1; k < N; ++k)
+     if (fds[k].revents & POLLIN | POLLERR ) {        
+         fds[k].revents = 0;     
+         // obsłuż klienta na gnieździe fds[k].fd 
+         // jeżeli read przekaże wartość <=0, usuń pozycję k z fds       
+}
+```
 
-    Po odebraniu sygnału SIGINT serwer przestaje przyjmować nowe połączenia. Obsługuje klientów połączonych do tej pory, aż do rozłączenia się ostatniego z nich. Sprawdź w jaki sposób zostało to zrealizowane.
+Jeżeli zdarzenie zaszło na deskryptorze głównym `fds[0].fd`, to znaczy, że nowy klient chce się połączyć. W takim przypadku serwer musi zaakceptować nowe połączenie za pomocą funkcji `accept`, a deskryptor nowego gniazda należy dodać do zbioru obserwowanych deskryptorów, czyli umieścić w tablicy deskryptorów `fds`.
 
-Nieblokujący tryb gniazd
-Działanie gniazd w domyślnym trybie
+Jeżeli zdarzenie zaszło na którymś z pozostałych deskryptorów, to należy odczytać dane, które zostały przesłane przez któregoś z wcześniej połączonych klientów. Należy rozpatrzyć różne przypadki. Jeśli `read` dla danego deskryptora przekaże w wyniku wartość ujemną (błąd) lub 0 (rozłączenie klienta), to deskryptor należy usunąć z tablicy `fds`.
 
-Zazwyczaj wywołanie funkcji write() powoduje skopiowanie danych podanych w argumencie do bufora. Następuje powrót z funkcji i nasz proces może działać dalej, a w tle następuje stopniowe wysyłanie przez sieć danych z bufora.
+## Ćwiczenia
 
-Co jednak się stanie, gdy dane do funkcji write() będą napływały szybciej, niż będzie możliwe ich wysyłanie przez sieć? Wówczas bufor wysyłania zapełni się i przy wywołaniu funkcji write() nastąpi zablokowanie procesu, aż do momentu, gdy dane z argumentu będą mogły zostać skopiowane do bufora. W tym czasie nasz proces nie będzie mógł robić nic innego, na przykład obsługiwać pozostałych połączeń. Problem ten występuje szczególnie w sytuacji, gdy głównym zadaniem naszego procesu jest wysyłanie dużych ilości danych, a także gdy odbiorca po drugiej stronie zachowuje się dziwnie, na przykład wysyła do nas różne żądania, ale nie odbiera tego, co mu wysyłamy - wtedy może nawet nastąpić całkowite zawieszenie naszego procesu.
+1. Przeanalizuj kod przykładowego serwera z `pliku poll_server.c`.
 
-Częściowo pomaga użycie funkcji poll() i sprawdzenie, czy dla danego gniazda jest ustawiona flaga POLLOUT (możliwość zapisania danych). Częściowo, dlatego że obecność tej flagi oznacza jedynie, że bufor nie jest całkiem pełny. Nie oznacza, że całe dane podane do funkcji write() się w nim zmieszczą, czyli że proces wywołując write() nie zostanie zablokowany.
-Ustawianie limitu czasu na zapis
+2. Uruchom serwer i co najmniej dwóch klientów.
+
+3. Serwer co 5 sekund wypisuje komunikat "Do something else". Zmień argumenty funkcji `poll()` tak, aby oczekiwał na połączenia aż do skutku.
+
+4. Po odebraniu sygnału SIGINT serwer przestaje przyjmować nowe połączenia. Obsługuje klientów połączonych do tej pory, aż do rozłączenia się ostatniego z nich. Sprawdź w jaki sposób zostało to zrealizowane.
+
+## Nieblokujący tryb gniazd
+### Działanie gniazd w domyślnym trybie
+
+Zazwyczaj wywołanie funkcji `write()` powoduje skopiowanie danych podanych w argumencie do bufora. Następuje powrót z funkcji i nasz proces może działać dalej, a w tle następuje stopniowe wysyłanie przez sieć danych z bufora.
+
+Co jednak się stanie, gdy dane do funkcji `write()` będą napływały szybciej, niż będzie możliwe ich wysyłanie przez sieć? Wówczas bufor wysyłania zapełni się i przy wywołaniu funkcji `write()` nastąpi zablokowanie procesu, aż do momentu, gdy dane z argumentu będą mogły zostać skopiowane do bufora. W tym czasie nasz proces nie będzie mógł robić nic innego, na przykład obsługiwać pozostałych połączeń. Problem ten występuje szczególnie w sytuacji, gdy głównym zadaniem naszego procesu jest wysyłanie dużych ilości danych, a także gdy odbiorca po drugiej stronie zachowuje się dziwnie, na przykład wysyła do nas różne żądania, ale nie odbiera tego, co mu wysyłamy - wtedy może nawet nastąpić całkowite zawieszenie naszego procesu.
+
+Częściowo pomaga użycie funkcji `poll()` i sprawdzenie, czy dla danego gniazda jest ustawiona flaga POLLOUT (możliwość zapisania danych). Częściowo, dlatego że obecność tej flagi oznacza jedynie, że bufor nie jest całkiem pełny. Nie oznacza, że całe dane podane do funkcji `write()` się w nim zmieszczą, czyli że proces wywołując `write()` nie zostanie zablokowany.
+
+### Ustawianie limitu czasu na zapis
 
 Jednym ze sposobów na radzenie sobie z opisanym wyżej problemem jest ustawienie maksymalnego czasu, jaki może działać funkcja 'write()'. Można to zrobić korzystając z możliwości ustawiania opcji gniazd:
 
+```c
 setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (void *)&timeout, sizeof(timeout))
+```
 
-gdzie sock to deskryptor gniazda, natomiast timeout() jest zmienną typu timeval zawierającą limit czasu, który chcemy ustawić (podobnie, jako trzeci argument podając SO_RCVTIMEO, możemy ustawić limit czasu działania funkcji read()). Jeśli nie uda się zakończyć zapisu w ustawionym czasie, funkcja write() kończy się. Przekazuje w wyniku liczbę zapisanych bajtów (jeśli część udało się zapisać – wtedy przy kolejnym wywołaniu możemy zapisać resztę), albo -1, ustawiając błąd w errno na EAGAIN lub EWOULDBLOCK. Rozwiązanie takie zastosowane zostało w pliku echo-client-timeout.c.
-Tryb nieblokujący
+gdzie `sock` to deskryptor gniazda, natomiast `timeout()` jest zmienną typu `timeval` zawierającą limit czasu, który chcemy ustawić (podobnie, jako trzeci argument podając `SO_RCVTIMEO`, możemy ustawić limit czasu działania funkcji `read()`). Jeśli nie uda się zakończyć zapisu w ustawionym czasie, funkcja `write()` kończy się. Przekazuje w wyniku liczbę zapisanych bajtów (jeśli część udało się zapisać – wtedy przy kolejnym wywołaniu możemy zapisać resztę), albo -1, ustawiając błąd w `errno` na `EAGAIN` lub `EWOULDBLOCK`. Rozwiązanie takie zastosowane zostało w pliku `echo-client-timeout.c`.
+
+### Tryb nieblokujący
 
 Innym podejściem jest przełączenie gniazda w tryb nieblokujący. Robimy to poleceniem:
 
+```c
 fcntl(sock, F_SETFL, O_NONBLOCK)
+```
 
-gdzie sock to deskryptor gniazda. W tym trybie każde wywołanie funkcji read() i write() natychmiast się kończy. Jeśli nie da się nic odebrać lub wysłać natychmiast, zwracają one -1, ustawiając błąd w errno na EAGAIN lub EWOULDBLOCK. Natomiast funkcja write() może zapisać część danych i zwrócić ich rozmiar (wtedy kolejnym wywołaniem write() możemy wysłać resztę). Przykład ilustrujący takie podejście znajduje się w pliku echo-serwer-nonblocking.c.
+gdzie `sock` to deskryptor gniazda. W tym trybie każde wywołanie funkcji `read()` i `write()` natychmiast się kończy. Jeśli nie da się nic odebrać lub wysłać natychmiast, zwracają one -1, ustawiając błąd w `errno` na `EAGAIN` lub `EWOULDBLOCK`. Natomiast funkcja `write()` może zapisać część danych i zwrócić ich rozmiar (wtedy kolejnym wywołaniem `write()` możemy wysłać resztę). Przykład ilustrujący takie podejście znajduje się w pliku `echo-serwer-nonblocking.c`.
 
-W trybie nieblokującym inne jest także zachowanie funkcji connect(): nie czeka ona na nawiązanie połączenia, tylko kończy się od razu, a połączenie jest nawiązywane w tle.
-Ćwiczenia
+W trybie nieblokującym inne jest także zachowanie funkcji `connect()`: nie czeka ona na nawiązanie połączenia, tylko kończy się od razu, a połączenie jest nawiązywane w tle.
 
-    Poeksperymentuj z dołączonymi programami. Uruchom je na różnych komputerach i przekieruj do klienta duży plik. Zobacz, po ilu wysłanych bajtach, nieodbieranych przez drugą stronę, write() się blokuje.
+### Ćwiczenia
 
-    Przekonaj się, że rzeczywiście write() na gnieździe nieblokującym lub z ustawionym limitem czasu może zakończyć się po wysłaniu części danych. Ile co najmniej danych do wysłania udaje się umieścić w buforze poleceniem write() po tym, gdy poll() ustawi flagę POLLOUT?
+1. Poeksperymentuj z dołączonymi programami. Uruchom je na różnych komputerach i przekieruj do klienta duży plik. Zobacz, po ilu wysłanych bajtach, nieodbieranych przez drugą stronę, `write()` się blokuje.
 
-Ćwiczenie punktowane (1.5 pkt)
+2. Przekonaj się, że rzeczywiście `write()` na gnieździe nieblokującym lub z ustawionym limitem czasu może zakończyć się po wysłaniu części danych. Ile co najmniej danych do wysłania udaje się umieścić w buforze poleceniem `write()` po tym, gdy `poll()` ustawi flagę `POLLOUT`?
 
-W oparciu o program poll-server napisz program poll-server-count, którego działanie jest rozszerzone o możliwość podania liczby aktualnie połączonych klientów oraz łącznej liczby klientów obsłużonych od początku działania serwera. Pozostała funcjonalność serwera pozostaje bez zmian.
+## Ćwiczenie punktowane (1.5 pkt)
 
-Serwer przyjmuje dwa parametry - numer portu, na którym obsługuje klientów (client z aktualnego scenariusza) oraz numer portu kontrolnego (przykładowe wywołanie: ./poll-server-count 10001 2323).
+W oparciu o program `poll-server` napisz program `poll-server-count`, którego działanie jest rozszerzone o możliwość podania liczby aktualnie połączonych klientów oraz łącznej liczby klientów obsłużonych od początku działania serwera. Pozostała funcjonalność serwera pozostaje bez zmian.
 
-Kiedy z serwerem łączy się na port kontrolny program nc i poprzez nc zostanie przesłany napis count, wtedy serwer odsyła informację w postaci:
+Serwer przyjmuje dwa parametry - numer portu, na którym obsługuje klientów (`client` z aktualnego scenariusza) oraz numer portu kontrolnego (przykładowe wywołanie: `./poll-server-count 10001 2323`).
 
+Kiedy z serwerem łączy się na port kontrolny program nc i poprzez nc zostanie przesłany napis `count`, wtedy serwer odsyła informację w postaci:
+
+```console
 Number of active clients: x
 Total number of clients: y
+```
 
-po czym zamyka połączenie. Napisy inne niż count są ignorowane i połączenie jest również zamykane. Połączenia kontrolne nie liczą się jako połączenia z klientami.
+po czym zamyka połączenie. Napisy inne niż `count` są ignorowane i połączenie jest również zamykane. Połączenia kontrolne nie liczą się jako połączenia z klientami.
 
-Przetestuj swoje rozwiązanie uruchamiając serwer, klientów i program nc na różnych komputerach.
+Przetestuj swoje rozwiązanie uruchamiając serwer, klientów i program `nc` na różnych komputerach.
