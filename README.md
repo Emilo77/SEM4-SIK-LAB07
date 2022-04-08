@@ -1,4 +1,4 @@
-# Serwery korzystające z poll
+### Scenariusz 7 - serwery korzystające z poll
 ## Współbieżny jednowątkowy serwer TCP
 
 Wielu klientów jednocześnie może być obsługiwanych przez pojedynczy wątek, który utrzymuje wiele otwartych połączeń i obsługuje klientów w miarę napływu danych.
