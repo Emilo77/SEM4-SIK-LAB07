@@ -30,9 +30,21 @@ static void catch_int(int sig) {
 	        "Signal %d catched. No new connections will be accepted.\n", sig);
 }
 
+void create_message(int socketfd, size_t actual_clients, size_t total_clients) {
+	char message[BUF_SIZE];
+	snprintf(message, BUF_SIZE, "Number of active clients: %zu\n"
+	                            "Total number of clients: %zu\n",
+	         actual_clients, total_clients);
+	ssize_t send_bytes = write(socketfd, message, strlen(message));
+	if (send_bytes == -1) {
+		perror("write");
+		exit(EXIT_FAILURE);
+	}
+}
+
 int main(int argc, char *argv[]) {
 
-	if(argc != 3) {
+	if (argc != 3) {
 		fprintf(stderr, "Usage: %s <port> <control_port>\n", argv[0]);
 		return 1;
 	}
@@ -46,13 +58,18 @@ int main(int argc, char *argv[]) {
 
 	struct pollfd poll_descriptors[CONNECTIONS];
 	bool is_control[CONNECTIONS] = {false};
-	/* Inicjujemy tablicę z gniazdkami klientów, poll_descriptors[0] to gniazdko centrali */
+
+/*	 Inicjujemy tablicę z gniazdkami klientów
+	 poll_descriptors[0] to gniazdko centrali
+	 poll_descriptors[1] to gniazdko kontrolne */
+
 	for (int i = 0; i < CONNECTIONS; ++i) {
 		poll_descriptors[i].fd = -1;
 		poll_descriptors[i].events = POLLIN;
 		poll_descriptors[i].revents = 0;
 	}
 	size_t active_clients = 0;
+	size_t total_clients = 0;
 	/* Tworzymy gniazdko centrali */
 	poll_descriptors[0].fd = open_socket();
 	poll_descriptors[1].fd = open_socket();
@@ -82,25 +99,30 @@ int main(int argc, char *argv[]) {
 			PRINT_ERRNO();
 		} else if (poll_status > 0) {
 			if (!finish) {
-				for(int central_id = 0; central_id < 2; central_id++) {
-					if(poll_descriptors[central_id].revents & POLLIN) {
+				for (int central_id = 0; central_id < 2; central_id++) {
+					if (poll_descriptors[central_id].revents & POLLIN) {
 						/* Przyjmuję nowe połączenie */
-						int client_fd = accept_connection(poll_descriptors[central_id].fd, NULL);
+						int client_fd = accept_connection(
+								poll_descriptors[central_id].fd, NULL);
 
 						bool accepted = false;
 						for (int i = 2; i < CONNECTIONS; ++i) {
 							if (poll_descriptors[i].fd == -1) {
-								if(central_id == 0) {
-									fprintf(stderr, "Received new connection (%d)\n", i);
+								if (central_id == 0) {
+									fprintf(stderr,
+									        "Received new connection (%d)\n",
+									        i);
 								} else {
-									fprintf(stderr, "Received new control (%d)\n", i);
+									fprintf(stderr,
+									        "Received new control (%d)\n", i);
 								}
 
 								poll_descriptors[i].fd = client_fd;
 								poll_descriptors[i].events = POLLIN;
-								if(central_id == 0) {
+								if (central_id == 0) {
 									is_control[i] = false;
 									active_clients++;
+									total_clients++;
 								} else {
 									is_control[i] = true;
 								}
@@ -126,21 +148,38 @@ int main(int argc, char *argv[]) {
 						        i, errno, strerror(errno));
 						CHECK_ERRNO(close(poll_descriptors[i].fd));
 						poll_descriptors[i].fd = -1;
-						if(!is_control[i]) {
+						if (!is_control[i]) {
 							active_clients -= 1;
+						} else {
+							is_control[i] = false;
 						}
 					} else if (received_bytes == 0) {
 						fprintf(stderr, "Ending connection (%d)\n", i);
 						CHECK_ERRNO(close(poll_descriptors[i].fd));
 						poll_descriptors[i].fd = -1;
-						if(!is_control[i]) {
+						if (!is_control[i]) {
 							active_clients -= 1;
+						} else {
+							is_control[i] = false;
 						}
 					} else {
-						if(is_control[i]) {
-							printf("%zu\n", active_clients);
+						if (is_control[i]) {
+							if((strncmp(buf, "count", 5) == 0) && ((received_bytes == 5)
+							|| (received_bytes == 6 && buf[5] == '\n'))) {
+								create_message(poll_descriptors[i].fd, active_clients, total_clients);
+							} else {
+								fprintf(stderr, "Ending connection (%d)\n", i);
+								CHECK_ERRNO(close(poll_descriptors[i].fd));
+								poll_descriptors[i].fd = -1;
+								if (!is_control[i]) {
+									active_clients -= 1;
+								} else {
+									is_control[i] = false;
+								}
+							}
 						} else {
-							printf("(%d) -->%.*s\n", i, (int) received_bytes, buf);
+							printf("(%d) -->%.*s\n", i, (int) received_bytes,
+							       buf);
 						}
 					}
 				}
