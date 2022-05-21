@@ -167,16 +167,16 @@ int main(int argc, char *argv[]) {
                    (received_bytes == 6 && buf[5] == '\n'))) {
                 create_message(poll_descriptors[i].fd, active_clients,
                                total_clients);
-              } else {
-                fprintf(stderr, "Ending connection (%d)\n", i);
-                CHECK_ERRNO(close(poll_descriptors[i].fd));
-                poll_descriptors[i].fd = -1;
-                if (!is_control[i]) {
-                  active_clients -= 1;
-                } else {
-                  is_control[i] = false;
-                }
               }
+              fprintf(stderr, "Ending connection (%d)\n", i);
+              CHECK_ERRNO(close(poll_descriptors[i].fd));
+              poll_descriptors[i].fd = -1;
+              if (!is_control[i]) {
+                active_clients -= 1;
+              } else {
+                is_control[i] = false;
+              }
+
             } else {
               printf("(%d) -->%.*s\n", i, (int)received_bytes, buf);
             }
